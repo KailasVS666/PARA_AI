@@ -172,7 +172,7 @@ export default function LandingView({ setView }: LandingViewProps) {
               Autonomous Detection Engine
             </h2>
             <p className="font-sans text-slate-400 max-w-2xl mx-auto text-sm md:text-base leading-relaxed">
-              Our AI pipeline processes standard video feeds into reviewable road-safety evidence.
+              Our proprietary AI pipeline processes standard video feeds into actionable civic intelligence with military-grade precision.
             </p>
           </div>
 
@@ -226,7 +226,7 @@ export default function LandingView({ setView }: LandingViewProps) {
                 Human Verification
               </h3>
               <p className="font-sans text-slate-400 text-sm leading-relaxed">
-                Reviewers inspect flagged incidents before anything is included in a report.
+                Expert analysts review flagged incidents to ensure 99.9% reporting accuracy and double check edge cases.
               </p>
             </div>
 

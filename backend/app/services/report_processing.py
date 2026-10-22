@@ -9,6 +9,7 @@ from time import monotonic
 from typing import Any
 
 import numpy as np
+import torch
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
@@ -94,9 +95,11 @@ def _boxes(
     confidence: float,
 ) -> list[tuple[str, float, BoundingBox]]:
     """Normalize model detections into labels, scores, and bounding boxes."""
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
     result = model.predict(
         image,
         conf=confidence,
+        device=device,
         verbose=False,
     )
 
@@ -419,38 +422,6 @@ def _set_progress(
     report.summary_json = summary
 
 
-def _incident_box(incident: Incident) -> BoundingBox | None:
-    """Return the stored associated box when it is valid."""
-    values = incident.bounding_box
-    if not isinstance(values, list) or len(values) != 4:
-        return None
-    try:
-        return BoundingBox(
-            left=float(values[0]),
-            top=float(values[1]),
-            right=float(values[2]),
-            bottom=float(values[3]),
-        )
-    except (TypeError, ValueError):
-        return None
-
-
-def _matches_recent_incident(
-    previous: Incident,
-    timestamp: float,
-    bounding_box: BoundingBox | None,
-) -> bool:
-    """Match one object across nearby frames without merging neighbors."""
-    if timestamp - previous.timestamp > settings.incident_deduplication_seconds:
-        return False
-
-    previous_box = _incident_box(previous)
-    if previous_box is None or bounding_box is None:
-        return previous_box is None and bounding_box is None
-
-    return _intersection_over_union(previous_box, bounding_box) >= settings.pothole_event_iou
-
-
 def _recognize_plate(
     image: np.ndarray,
     associated_box: BoundingBox,
@@ -516,7 +487,7 @@ def _recognize_plate(
 def _record(
     database: Session,
     report: Report,
-    recent: dict[str, list[Incident]],
+    recent: dict[str, Incident],
     *,
     kind: str,
     title: str,
@@ -527,17 +498,13 @@ def _record(
     motorcycle: BoundingBox | None = None,
 ) -> None:
     """Save an incident and update evidence when a better detection appears."""
-    candidates = recent.setdefault(kind, [])
-    previous = next(
-        (
-            item
-            for item in reversed(candidates)
-            if _matches_recent_incident(item, timestamp, motorcycle)
-        ),
-        None,
-    )
+    previous = recent.get(kind)
 
-    if previous is not None:
+    if (
+        previous is not None
+        and timestamp - previous.timestamp
+        <= settings.incident_deduplication_seconds
+    ):
         if confidence <= previous.confidence:
             return
 
@@ -618,7 +585,7 @@ def _record(
 
     database.add(incident)
     database.flush()
-    candidates.append(incident)
+    recent[kind] = incident
 
 
 settings = get_settings()
@@ -661,7 +628,7 @@ def process_report(report_id: str) -> None:
         road_sampler = FrameSampler(settings.road_fps)
         traffic_next = 0.0
         road_next = 0.0
-        recent: dict[str, list[Incident]] = {}
+        recent: dict[str, Incident] = {}
 
         with VideoReader(report.video_path) as reader:
             metadata = reader.metadata
@@ -738,13 +705,11 @@ def process_report(report_id: str) -> None:
             report.summary_json = {
                 "helmet_violations": sum(
                     item.type == "HELMET_VIOLATION"
-                    for group in recent.values()
-                    for item in group
+                    for item in recent.values()
                 ),
                 "potholes": sum(
                     item.type == "POTHOLE"
-                    for group in recent.values()
-                    for item in group
+                    for item in recent.values()
                 ),
                 "model_warnings": model_warnings,
                 "inference_mode": (

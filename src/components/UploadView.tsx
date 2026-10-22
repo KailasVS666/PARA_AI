@@ -8,21 +8,11 @@ interface UploadViewProps {
   onUploadComplete: (report: ApiReport) => void;
 }
 
-function formatDuration(seconds: number | null | undefined): string {
-  if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds < 0) {
-    return 'Duration unavailable';
-  }
-
-  const totalSeconds = Math.floor(seconds);
-  const minutes = Math.floor(totalSeconds / 60);
-  const remainingSeconds = totalSeconds % 60;
-  return `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
-}
-
 export default function UploadView({ setView, onUploadComplete }: UploadViewProps) {
   const [isDragActive, setIsDragActive] = useState(false);
   const [file, setFile] = useState<{ name: string; size: string } | null>(null);
   const [progress, setProgress] = useState(0);
+  const [videoDuration, setVideoDuration] = useState<string | null>(null);
   const [uploadSpeed, setUploadSpeed] = useState('0.0 MB/s');
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<ApiReport | null>(null);
@@ -43,6 +33,25 @@ export default function UploadView({ setView, onUploadComplete }: UploadViewProp
     const fileSize = selectedFile.size;
     const formattedSize = (fileSize / (1024 * 1024)).toFixed(1) + ' MB';
     const newFile = { name: fileName, size: formattedSize };
+    setVideoDuration(null);
+    if (selectedFile.type.startsWith('video/')) {
+      const video = document.createElement('video');
+      const objectUrl = URL.createObjectURL(selectedFile);
+      video.preload = 'metadata';
+      video.onloadedmetadata = () => {
+        if (Number.isFinite(video.duration) && video.duration >= 0) {
+          const totalSeconds = Math.floor(video.duration);
+          const minutes = Math.floor(totalSeconds / 60);
+          const seconds = totalSeconds % 60;
+          setVideoDuration(
+            `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+          );
+        }
+        URL.revokeObjectURL(objectUrl);
+      };
+      video.onerror = () => URL.revokeObjectURL(objectUrl);
+      video.src = objectUrl;
+    }
     setFile(newFile);
     setReport(null);
     setError(null);
@@ -84,6 +93,7 @@ export default function UploadView({ setView, onUploadComplete }: UploadViewProp
 
   const cancelUpload = () => {
     setFile(null);
+    setVideoDuration(null);
     setProgress(0);
     setReport(null);
     setError(null);
@@ -123,7 +133,7 @@ export default function UploadView({ setView, onUploadComplete }: UploadViewProp
             Select a file or drag and drop
           </h3>
           <p className="font-display text-[10px] text-slate-400 uppercase tracking-widest mb-6">
-            MP4, MOV, AVI
+            MP4, MOV, AVI UP TO 2GB
           </p>
           
           <button className="px-5 py-2.5 bg-slate-900 text-blue-300 border border-slate-700/80 rounded-lg font-medium text-xs hover:bg-slate-800 transition-colors pointer-events-none">
@@ -152,7 +162,7 @@ export default function UploadView({ setView, onUploadComplete }: UploadViewProp
                 <PlayCircle className="text-blue-300" size={32} />
               </div>
               <div className="absolute bottom-2 right-2 bg-slate-950/90 px-1.5 py-0.5 rounded text-[10px] font-mono text-slate-200 backdrop-blur-sm">
-                {formatDuration(report?.metadata.duration)}
+                {videoDuration ?? '--:--'}
               </div>
             </div>
 
