@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ViewState } from '../types';
 import { AlertCircle, Check, ShieldAlert, Eye, Lock } from 'lucide-react';
 import { api, ApiReport } from '../api';
@@ -9,57 +9,72 @@ interface ProcessingViewProps {
   onCompleted: () => Promise<void>;
 }
 
-const DECORATIVE_LOGS = [
-  "det_0x8f: vehicle_stalled",
-  "lane_drift: true (0.89)",
-  "track_car_0x1b: class_sedan",
-  "intersection_entry: speed_42kmh",
-  "yolo_v8: pothole_detected (0.76)",
-  "double_yellow_crossing: flagged",
-  "helmet_detect: missing (rider_02)"
-];
-
 export default function ProcessingView({ setView, report, onCompleted }: ProcessingViewProps) {
   const [progress, setProgress] = useState(0);
   const [framesProcessed, setFramesProcessed] = useState(0);
   const [estCompletion, setEstCompletion] = useState('--:--');
-  const [currentDetections, setCurrentDetections] = useState(0);
-  const [liveIncidents, setLiveIncidents] = useState(0);
-  const [floatingLogs, setFloatingLogs] = useState<string[]>([DECORATIVE_LOGS[0], DECORATIVE_LOGS[1]]);
+  const [currentStage, setCurrentStage] = useState('Waiting for backend status');
+  const [statusMessage, setStatusMessage] = useState('');
   const [failed, setFailed] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [pollGeneration, setPollGeneration] = useState(0);
+  const timerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!report) { setView('UPLOAD'); return; }
     let active = true;
+
+    const schedulePoll = (delay: number) => {
+      if (active) {
+        timerRef.current = window.setTimeout(() => void poll(), delay);
+      }
+    };
+
     const poll = async () => {
       try {
         const data = await api.progress(report.id);
         if (!active) return;
         setProgress(data.percent_complete);
         setFramesProcessed(data.frames_read);
+        setCurrentStage(data.current_stage);
+        setStatusMessage(data.error || '');
         const seconds = Math.ceil(data.estimated_time_remaining);
         setEstCompletion(`${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`);
-        setCurrentDetections(Math.max(0, Math.floor(data.percent_complete / 35)));
-        setLiveIncidents(Math.max(0, Math.floor(data.percent_complete / 50)));
-        setFloatingLogs([data.current_stage, data.error || DECORATIVE_LOGS[Math.min(DECORATIVE_LOGS.length - 1, Math.floor(data.percent_complete / 20))]]);
-        if (data.status === 'READY_FOR_REVIEW' || data.status === 'completed') {
+
+        if (data.status === 'READY_FOR_REVIEW') {
           setFailed(false);
           await onCompleted();
           if (active) setView('CONSOLE');
+          return;
         }
-        if (data.status === 'FAILED' || data.status === 'failed') {
+
+        if (data.status === 'FAILED') {
           setFailed(true);
-          setFloatingLogs(['Processing failed', data.error || 'You can retry this analysis.']);
+          return;
         }
+
+        if (data.status === 'SUBMITTED') {
+          return;
+        }
+
+        if (active) schedulePoll(1500);
       } catch (error) {
-        if (active) setFloatingLogs(['Connection issue', error instanceof Error ? error.message : 'Unable to read processing progress.']);
+        if (!active) return;
+        setCurrentStage('Unable to read processing status');
+        setStatusMessage(error instanceof Error ? error.message : 'Temporary progress error. Retrying…');
+        schedulePoll(2500);
       }
     };
+
     void poll();
-    const interval = window.setInterval(() => void poll(), 1000);
-    return () => { active = false; window.clearInterval(interval); };
-  }, [onCompleted, report, setView]);
+    return () => {
+      active = false;
+      if (timerRef.current !== null) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [onCompleted, pollGeneration, report, setView]);
 
   const currentPhase = () => {
     if (progress < 25) return 0; // Upload complete
@@ -76,9 +91,12 @@ export default function ProcessingView({ setView, report, onCompleted }: Process
       setFailed(false);
       setProgress(0);
       setFramesProcessed(0);
-      setFloatingLogs(['Analysis restarted', 'Preparing video frames...']);
+      setCurrentStage('Analysis restarted');
+      setStatusMessage('Preparing video frames…');
+      setPollGeneration((current) => current + 1);
     } catch (error) {
-      setFloatingLogs(['Could not restart analysis', error instanceof Error ? error.message : 'Please try again.']);
+      setCurrentStage('Could not restart analysis');
+      setStatusMessage(error instanceof Error ? error.message : 'Please try again.');
     } finally {
       setRetrying(false);
     }
@@ -270,12 +288,9 @@ export default function ProcessingView({ setView, report, onCompleted }: Process
             </div>
           </div>
 
-          {/* Floating Data Snippets (Decorative & Interactive) */}
-          <div className="absolute top-1/4 left-4 glass-panel rounded-lg px-3 py-1.5 border border-blue-500/20 text-[11px] text-blue-300 font-mono opacity-85 shadow-lg select-none">
-            {floatingLogs[0]}
-          </div>
-          <div className="absolute bottom-1/4 right-4 glass-panel rounded-lg px-3 py-1.5 border border-emerald-500/20 text-[11px] text-emerald-300 font-mono opacity-85 shadow-lg select-none">
-            {floatingLogs[1]}
+          <div className="absolute bottom-8 left-1/2 w-[min(90%,24rem)] -translate-x-1/2 rounded-lg border border-slate-800/70 bg-slate-950/80 px-4 py-2 text-center shadow-lg">
+            <p className="truncate text-xs font-medium text-blue-300" title={currentStage}>{currentStage}</p>
+            {statusMessage && <p className="mt-1 truncate text-[11px] text-slate-500" title={statusMessage}>{statusMessage}</p>}
           </div>
         </div>
       </main>
@@ -287,22 +302,22 @@ export default function ProcessingView({ setView, report, onCompleted }: Process
             <Eye className="text-slate-500" size={18} />
             <div className="flex flex-col">
               <span className="font-display text-[9px] text-slate-500 uppercase tracking-wider font-semibold">
-                Current Detections
+                Frames Processed
               </span>
               <span className="font-sans text-sm text-slate-200 font-semibold leading-none mt-0.5">
-                {currentDetections}
+                {framesProcessed.toLocaleString()}
               </span>
             </div>
           </div>
           <div className="w-px h-6 bg-slate-800/50 hidden md:block"></div>
           <div className="flex items-center gap-2.5">
-            <ShieldAlert className="text-red-400" size={18} />
+            <ShieldAlert className="text-emerald-400" size={18} />
             <div className="flex flex-col">
               <span className="font-display text-[9px] text-slate-500 uppercase tracking-wider font-semibold">
-                Live Incidents
+                Current Stage
               </span>
-              <span className="font-sans text-sm text-red-400 font-semibold leading-none mt-0.5">
-                {liveIncidents}
+              <span className="max-w-[14rem] truncate font-sans text-sm font-semibold leading-none text-emerald-300 mt-0.5" title={currentStage}>
+                {currentStage}
               </span>
             </div>
           </div>

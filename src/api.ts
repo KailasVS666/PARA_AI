@@ -7,7 +7,13 @@ export interface ApiReport {
   filename: string;
   video_url: string | null;
   status: string;
-  metadata: { duration: number | null; frame_count: number | null; fps: number | null };
+  metadata: {
+    duration: number | null;
+    frame_count: number | null;
+    fps: number | null;
+    resolution?: string | null;
+    codec?: string | null;
+  };
 }
 
 export interface ApiIncident {
@@ -53,11 +59,24 @@ export interface Submission {
 
 type UploadProgressHandler = (percentComplete: number) => void;
 
+export class ApiRequestError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiRequestError';
+    this.status = status;
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, init);
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(body.detail || body.errors?.[0] || `Request failed (${response.status}).`);
+    throw new ApiRequestError(
+      body.detail || body.errors?.[0] || `Request failed (${response.status}).`,
+      response.status,
+    );
   }
   const body = await response.json() as T | { data: T };
   return typeof body === 'object' && body !== null && 'data' in body ? body.data : body as T;

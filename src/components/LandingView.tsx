@@ -1,16 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { ViewState } from '../types';
 import { 
   Upload, 
-  Play, 
   AlertTriangle, 
   Construction, 
   ShieldCheck, 
   FileSpreadsheet, 
   Gift, 
-  Maximize,
-  CheckCircle2,
-  Tv
 } from 'lucide-react';
 
 interface LandingViewProps {
@@ -19,8 +15,6 @@ interface LandingViewProps {
 
 export default function LandingView({ setView }: LandingViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const previewRef = useRef<HTMLDivElement>(null);
-  const [isPlayingDemo, setIsPlayingDemo] = useState(false);
 
   // WebGL subtle pulsing grid animation from mockup
   useEffect(() => {
@@ -128,11 +122,6 @@ export default function LandingView({ setView }: LandingViewProps) {
     };
   }, []);
 
-  const scrollToPreview = () => {
-    previewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    setIsPlayingDemo(true);
-  };
-
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
       {/* Hero Section */}
@@ -160,7 +149,7 @@ export default function LandingView({ setView }: LandingViewProps) {
           </h1>
 
           <p className="font-sans text-base md:text-lg text-slate-400 max-w-2xl mb-12 leading-relaxed">
-            Upload ordinary dashcam footage and let AI automatically detect traffic violations and potholes before submitting a verified report.
+            Upload ordinary dashcam footage and let AI detect helmet violations and potholes before submitting a verified report.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
@@ -170,13 +159,6 @@ export default function LandingView({ setView }: LandingViewProps) {
             >
               <Upload size={18} />
               Upload Dashcam Footage
-            </button>
-            <button 
-              onClick={scrollToPreview}
-              className="bg-transparent border border-slate-700 hover:bg-blue-500/10 hover:border-blue-400 text-blue-300 font-medium px-8 py-4 rounded-xl flex items-center justify-center gap-2 transition-all duration-300 cursor-pointer"
-            >
-              <Play size={18} fill="currentColor" />
-              Watch Demo
             </button>
           </div>
         </div>
@@ -190,12 +172,12 @@ export default function LandingView({ setView }: LandingViewProps) {
               Autonomous Detection Engine
             </h2>
             <p className="font-sans text-slate-400 max-w-2xl mx-auto text-sm md:text-base leading-relaxed">
-              Our proprietary AI pipeline processes standard video feeds into actionable civic intelligence with military-grade precision.
+              Our AI pipeline processes standard video feeds into reviewable road-safety evidence.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Feature 1: Traffic Violations */}
+            {/* Feature 1: Helmet Violations */}
             <div className="md:col-span-2 glass-panel rounded-2xl p-8 relative overflow-hidden group border border-slate-800/40">
               <div className="absolute -right-20 -top-20 w-64 h-64 bg-red-950/10 rounded-full blur-3xl group-hover:bg-red-950/20 transition-colors duration-500"></div>
               
@@ -204,10 +186,10 @@ export default function LandingView({ setView }: LandingViewProps) {
               </div>
               
               <h3 className="font-display text-xl font-bold text-white mb-3 relative z-10">
-                Traffic Violation Detection
+                Helmet Violation Detection
               </h3>
               <p className="font-sans text-slate-400 text-sm mb-6 relative z-10 max-w-md leading-relaxed">
-                Instantly identify reckless driving, red-light running, and illegal maneuvers from raw video frames.
+                Identify missing-helmet findings from dashcam frames and send each result through human review.
               </p>
               
               <div className="h-48 w-full bg-slate-950 rounded-xl border border-slate-800/50 overflow-hidden relative">
@@ -244,7 +226,7 @@ export default function LandingView({ setView }: LandingViewProps) {
                 Human Verification
               </h3>
               <p className="font-sans text-slate-400 text-sm leading-relaxed">
-                Expert analysts review flagged incidents to ensure 99.9% reporting accuracy and double check edge cases.
+                Reviewers inspect flagged incidents before anything is included in a report.
               </p>
             </div>
 
@@ -279,51 +261,6 @@ export default function LandingView({ setView }: LandingViewProps) {
         </div>
       </section>
 
-      {/* Demo Section */}
-      <section ref={previewRef} className="py-24 px-6 lg:px-16 bg-slate-950 relative z-10 border-t border-slate-900/20">
-        <div className="max-w-5xl mx-auto">
-          <div className="flex flex-col md:flex-row items-end justify-between mb-12 gap-6">
-            <div>
-              <h2 className="font-display text-3xl font-bold text-white mb-2">
-                Platform Preview
-              </h2>
-              <p className="font-sans text-slate-400 text-sm">
-                See the intelligence engine in action analyzing raw traffic cameras.
-              </p>
-            </div>
-            <button 
-              onClick={() => setIsPlayingDemo(!isPlayingDemo)}
-              className="bg-transparent border border-slate-800 text-slate-300 hover:border-slate-600 font-medium px-6 py-3 rounded-xl flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap text-sm"
-            >
-              <Maximize size={16} />
-              Full Screen
-            </button>
-          </div>
-
-          <div 
-            onClick={() => setIsPlayingDemo(!isPlayingDemo)}
-            className="w-full aspect-video rounded-2xl bg-slate-900 border border-slate-800/40 shadow-2xl relative overflow-hidden flex items-center justify-center group cursor-pointer"
-          >
-            {isPlayingDemo ? (
-              <iframe 
-                className="absolute inset-0 w-full h-full border-none z-10"
-                src="https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&mute=1" 
-                title="Platform Demo"
-                allow="autoplay; encrypted-media"
-                allowFullScreen
-              ></iframe>
-            ) : (
-              <>
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-950 via-slate-950 to-slate-900 opacity-60 group-hover:scale-102 transition-transform duration-500" />
-                <div className="absolute inset-0 bg-slate-950/40 group-hover:bg-slate-950/20 transition-colors duration-300"></div>
-                <div className="w-20 h-20 rounded-full bg-blue-500/80 backdrop-blur-md flex items-center justify-center relative z-10 group-hover:scale-110 transition-transform duration-300 shadow-[0_0_30px_rgba(59,130,246,0.4)]">
-                  <Play size={32} className="text-white ml-1" fill="currentColor" />
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </section>
     </div>
   );
 }

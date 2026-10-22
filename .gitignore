@@ -223,3 +223,26 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 para.db
+
+
+# Local databases and runtime uploads
+*.sqlite
+*.sqlite3
+*.db
+backend/uploads/*
+!backend/uploads/.gitkeep
+uploads/
+
+# Local configuration and secrets
+.env.*
+!.env.example
+
+# Temporary backups
+backup_before_fixes_*/
+*.bak
+
+# Local AI tooling configuration
+opencode.json
+
+# Frontend build output
+dist/

@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api, ApiIncident, ApiReport, DashboardResponse } from './api';
-import { DashboardStats, Incident, SubmissionSummary, ViewState } from './types';
+import { api, ApiRequestError, type ApiIncident, type ApiReport, type DashboardResponse } from './api';
+import type {
+  DashboardStats,
+  Incident,
+  SubmissionSummary,
+  ViewState,
+} from './types';
+
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import LandingView from './components/LandingView';
@@ -10,51 +16,236 @@ import SuccessView from './components/SuccessView';
 import ConsoleView from './components/ConsoleView';
 import CitizenDashboardView from './components/CitizenDashboardView';
 
-const EMPTY_STATS: DashboardStats = { submitted: 0, verified: 0, pending: 0, rejected: 0, rewards: 0, riskIndex: 12, safetyScore: 94, routesAnalyzed: 0 };
+const EMPTY_STATS: DashboardStats = {
+  submitted: 0,
+  verified: 0,
+  pending: 0,
+  rejected: 0,
+  rewards: 0,
+  riskIndex: 0,
+  safetyScore: 0,
+  routesAnalyzed: 0,
+};
 
-const toIncident = (item: ApiIncident, report: ApiReport | null): Incident => ({
-  id: item.id,
-  trackingId: item.id.slice(0, 8).toUpperCase(),
-  type: item.type === 'pothole' ? 'Potholes' : 'Helmet Violations',
-  title: item.title,
-  time: new Date(item.timestamp * 1000).toISOString().slice(14, 19),
-  date: new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }),
-  severity: item.confidence >= 0.9 ? 'High' : 'Medium',
-  confidence: item.confidence * 100,
-  licensePlate: item.license_plate || '--',
-  location: 'Dashcam route',
-  status: item.status.toUpperCase() === 'APPROVED' ? 'Verified' : item.status.toUpperCase() === 'REJECTED' ? 'Rejected' : 'Pending',
-  aiAnalysis: item.details.source === 'demo_inference' ? 'Demo inference result awaiting human confirmation.' : 'AI evidence awaiting human confirmation.',
-  videoUrl: api.mediaUrl(report?.video_url || null),
-  thumbnailUrl: api.mediaUrl(item.evidence_url),
-  evidenceUrl: api.mediaUrl(item.evidence_url),
-  rewardCr: item.reward_credits,
-  timestampSeconds: item.timestamp,
-  ocrConfidence: item.ocr_confidence,
-});
+function normalizeType(value: unknown): string {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ');
+}
 
-const toStats = (data: DashboardResponse): DashboardStats => ({
-  submitted: data.submitted, verified: data.verified, pending: data.pending, rejected: data.rejected,
-  rewards: data.rewards, riskIndex: data.risk_index, safetyScore: data.safety_score, routesAnalyzed: data.routes_analyzed,
-});
+function mapIncidentType(
+  rawType: string,
+): Incident['type'] {
+  const type = normalizeType(rawType);
+
+  if (['pothole', 'potholes', 'road surface pothole'].includes(type)) {
+    return 'Potholes';
+  }
+
+  if (
+    [
+      'helmet violation',
+      'helmet violations',
+      'no helmet',
+      'missing helmet detection',
+    ].includes(type)
+  ) {
+    return 'Helmet Violations';
+  }
+
+  return 'Other';
+}
+
+function mapIncidentStatus(
+  rawStatus: string,
+): Incident['status'] {
+  const status = normalizeType(rawStatus);
+
+  if (
+    status === 'approved' ||
+    status === 'verified'
+  ) {
+    return 'Verified';
+  }
+
+  if (
+    status === 'rejected' ||
+    status === 'declined'
+  ) {
+    return 'Rejected';
+  }
+
+  return 'Pending';
+}
+
+function formatIncidentTime(timestamp: number | null): string {
+  if (!Number.isFinite(timestamp) || timestamp < 0) {
+    return '--:--';
+  }
+
+  const totalSeconds = Math.floor(timestamp);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function getIncidentDate(timestamp: number | null): string {
+  if (!Number.isFinite(timestamp) || timestamp < 0) {
+    return new Date().toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  }
+
+  // The incident timestamp is a video offset, not a calendar timestamp.
+  // Until the backend supplies a recording date, use today's date.
+  return new Date().toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function getLicensePlate(value: string | null | undefined): string {
+  const plate = value?.trim();
+
+  if (
+    !plate ||
+    ['unknown', '--', 'n/a', 'none', 'null'].includes(
+      plate.toLowerCase(),
+    )
+  ) {
+    return 'UNKNOWN';
+  }
+
+  return plate;
+}
+
+function toIncident(
+  item: ApiIncident,
+  report: ApiReport | null,
+): Incident {
+  const confidence = Number(item.confidence);
+  const safeConfidence = Number.isFinite(confidence)
+    ? Math.min(1, Math.max(0, confidence))
+    : 0;
+
+  const timestamp = Number(item.timestamp);
+  const safeTimestamp: number | null =
+    Number.isFinite(timestamp) && timestamp >= 0
+      ? timestamp
+      : null;
+
+  const ocrValue =
+    item.ocr_confidence === null ||
+    item.ocr_confidence === undefined
+      ? null
+      : Number(item.ocr_confidence);
+
+  const ocrConfidence =
+    ocrValue !== null && Number.isFinite(ocrValue) && ocrValue > 0
+      ? Math.min(100, Math.max(0, ocrValue * 100))
+      : null;
+
+  const incidentType = mapIncidentType(item.type);
+  const source = String(item.details?.source ?? '');
+
+  let aiAnalysis =
+    'Review the available evidence before deciding whether to approve this incident.';
+
+  if (source === 'demo_inference') {
+    aiAnalysis =
+      'This finding was generated by the demo inference pipeline. Human review is required before submission.';
+  } else if (source === 'approved_model') {
+    aiAnalysis =
+      'This finding was produced by the configured detection pipeline. Inspect the evidence and confirm the finding before submission.';
+  }
+
+  if (
+    !item.license_plate ||
+    getLicensePlate(item.license_plate) === 'UNKNOWN'
+  ) {
+    aiAnalysis +=
+      ' The license plate was not recognized in the available result.';
+  }
+
+  return {
+    id: item.id,
+    trackingId: item.id.slice(0, 8).toUpperCase(),
+    type: incidentType,
+    title: item.title || incidentType,
+    time: formatIncidentTime(safeTimestamp),
+    date: getIncidentDate(safeTimestamp),
+    severity:
+      safeConfidence >= 0.9
+        ? 'High'
+        : safeConfidence >= 0.7
+          ? 'Medium'
+          : 'Low',
+    confidence: safeConfidence * 100,
+    licensePlate: getLicensePlate(item.license_plate),
+    location: 'Location unavailable',
+    status: mapIncidentStatus(item.status),
+    aiAnalysis,
+    videoUrl: api.mediaUrl(report?.video_url || null),
+    thumbnailUrl: api.mediaUrl(item.evidence_url),
+    evidenceUrl: api.mediaUrl(item.evidence_url),
+    rewardCr: Number.isFinite(Number(item.reward_credits))
+      ? Number(item.reward_credits)
+      : 0,
+    timestampSeconds: safeTimestamp,
+    ocrConfidence,
+  };
+}
+
+function toStats(data: DashboardResponse): DashboardStats {
+  return {
+    submitted: data.submitted,
+    verified: data.verified,
+    pending: data.pending,
+    rejected: data.rejected,
+    rewards: data.rewards,
+    riskIndex: data.risk_index,
+    safetyScore: data.safety_score,
+    routesAnalyzed: data.routes_analyzed,
+  };
+}
 
 export default function App() {
   const [view, setView] = useState<ViewState>('LANDING');
   const [report, setReport] = useState<ApiReport | null>(null);
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [stats, setStats] = useState<DashboardStats>(EMPTY_STATS);
-  const [submission, setSubmission] = useState<SubmissionSummary | null>(null);
+  const [submission, setSubmission] =
+    useState<SubmissionSummary | null>(null);
 
   const refreshDashboard = useCallback(async () => {
-    try { setStats(toStats(await api.dashboard())); } catch { /* dashboard remains usable offline */ }
+    try {
+      const dashboard = await api.dashboard();
+      setStats(toStats(dashboard));
+    } catch {
+      // Keep the last known dashboard values if the API is unavailable.
+    }
   }, []);
-  useEffect(() => { void refreshDashboard(); }, [refreshDashboard]);
+
+  useEffect(() => {
+    void refreshDashboard();
+  }, [refreshDashboard]);
 
   const loadIncidents = useCallback(async () => {
-    if (!report) return;
+    if (!report) return [];
+
     const values = await api.incidents(report.id);
-    setIncidents(values.map(item => toIncident(item, report)));
+    const refreshedIncidents = values.map((item) => toIncident(item, report));
+
+    setIncidents(refreshedIncidents);
+
     await refreshDashboard();
+    return refreshedIncidents;
   }, [report, refreshDashboard]);
 
   const handleUploaded = (nextReport: ApiReport) => {
@@ -63,35 +254,165 @@ export default function App() {
     setSubmission(null);
   };
 
-  const handleReview = async (incidentId: string, action: 'APPROVE' | 'REJECT') => {
-    if (!report) return;
-    const updated = action === 'APPROVE' ? await api.approve(report.id, incidentId) : await api.reject(report.id, incidentId);
-    setIncidents(current => current.map(item => item.id === incidentId ? toIncident(updated, report) : item));
-    await refreshDashboard();
+  const handleReview = async (
+    incidentId: string,
+    action: 'APPROVE' | 'REJECT',
+  ): Promise<Incident> => {
+    if (!report) {
+      throw new Error('No report is selected for review.');
+    }
+
+    try {
+      if (action === 'APPROVE') {
+        await api.approve(report.id, incidentId);
+      } else {
+        await api.reject(report.id, incidentId);
+      }
+    } catch (error) {
+      if (error instanceof ApiRequestError && error.status === 409) {
+        try {
+          await loadIncidents();
+        } catch {
+          // Keep the original conflict detail visible if resync is unavailable.
+        }
+      }
+      throw error;
+    }
+
+    const refreshedIncidents = await loadIncidents();
+    const reviewedIncident = refreshedIncidents.find(
+      (incident) => incident.id === incidentId,
+    );
+
+    if (!reviewedIncident) {
+      throw new Error('The reviewed incident was not returned by the backend.');
+    }
+
+    return reviewedIncident;
   };
 
   const handleSubmit = async () => {
-    if (!report) return;
+    if (!report) {
+      throw new Error('Upload and analyze a video before submitting.');
+    }
+
+    const hasVerifiedIncidents = incidents.some(
+      (incident) => incident.status === 'Verified',
+    );
+
+    if (!hasVerifiedIncidents) {
+      throw new Error(
+        'Approve at least one incident before submitting the report.',
+      );
+    }
+
     const result = await api.submit(report.id);
-    setSubmission({ trackingId: result.tracking_id, submittedAt: result.submitted_at, incidentCount: result.incident_count, rewardCredits: result.reward_credits, governmentResponse: result.government_response, deliveryMode: result.delivery_mode, reportText: result.report_text });
+
+    setSubmission({
+      trackingId: result.tracking_id,
+      submittedAt: result.submitted_at,
+      incidentCount: result.incident_count,
+      rewardCredits: result.reward_credits,
+      governmentResponse: result.government_response,
+      deliveryMode: result.delivery_mode,
+      reportText: result.report_text,
+    });
+
     await refreshDashboard();
     setView('SUCCESS');
   };
 
   const content = () => {
     switch (view) {
-      case 'LANDING': return <LandingView setView={setView} />;
-      case 'UPLOAD': return <UploadView setView={setView} onUploadComplete={handleUploaded} />;
-      case 'PROCESSING': return <ProcessingView setView={setView} report={report} onCompleted={loadIncidents} />;
-      case 'CONSOLE': return <ConsoleView setView={setView} incidents={incidents} onReview={handleReview} onSubmit={handleSubmit} canSubmit={incidents.some(item => item.status === 'Verified')} />;
-      case 'SUCCESS': return <SuccessView setView={setView} fileName={report?.filename || 'dashcam footage'} submission={submission} />;
-      case 'CITIZEN_DASHBOARD': return <CitizenDashboardView setView={setView} stats={stats} />;
-      default: return <LandingView setView={setView} />;
+      case 'LANDING':
+        return <LandingView setView={setView} />;
+
+      case 'UPLOAD':
+        return (
+          <UploadView
+            setView={setView}
+            onUploadComplete={handleUploaded}
+          />
+        );
+
+      case 'PROCESSING':
+        return (
+          <ProcessingView
+            setView={setView}
+            report={report}
+            onCompleted={loadIncidents}
+          />
+        );
+
+      case 'CONSOLE':
+        return (
+          <ConsoleView
+            setView={setView}
+            report={report}
+            incidents={incidents}
+            onReview={handleReview}
+            onSubmit={handleSubmit}
+            canSubmit={incidents.some(
+              (incident) => incident.status === 'Verified',
+            )}
+          />
+        );
+
+      case 'SUCCESS':
+        return (
+          <SuccessView
+            setView={setView}
+            fileName={report?.filename || 'dashcam footage'}
+            submission={submission}
+          />
+        );
+
+      case 'CITIZEN_DASHBOARD':
+        return (
+          <CitizenDashboardView
+            setView={setView}
+            stats={stats}
+          />
+        );
+
+      default:
+        return <LandingView setView={setView} />;
     }
   };
 
-  const hasSideBar = view === 'CONSOLE' || view === 'CITIZEN_DASHBOARD';
-  const hasHeader = view === 'LANDING' || view === 'UPLOAD';
-  if (hasSideBar) return <div className="flex h-screen overflow-hidden bg-slate-950 font-sans"><Sidebar currentView={view} setView={setView} onEmergencyTrigger={() => alert('Emergency SOS broadcast is a demo-only action.')} /><div className="flex-1 flex flex-col overflow-hidden relative">{content()}</div></div>;
-  return <div className="min-h-screen bg-slate-950 relative overflow-x-hidden font-sans">{hasHeader && <Header currentView={view} setView={setView} />}<div className="w-full">{content()}</div></div>;
+  const hasSideBar =
+    view === 'CONSOLE' ||
+    view === 'CITIZEN_DASHBOARD';
+
+  const hasHeader =
+    view === 'LANDING' ||
+    view === 'UPLOAD';
+
+  if (hasSideBar) {
+    return (
+      <div className="flex h-screen overflow-hidden bg-slate-950 font-sans">
+        <Sidebar
+          currentView={view}
+          setView={setView}
+        />
+
+        <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+          {content()}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative min-h-screen overflow-x-hidden bg-slate-950 font-sans">
+      {hasHeader && (
+        <Header
+          currentView={view}
+          setView={setView}
+        />
+      )}
+
+      <div className="w-full">{content()}</div>
+    </div>
+  );
 }

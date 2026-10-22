@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { ViewState } from '../types';
 import { SubmissionSummary } from '../types';
-import { Home, Download, Receipt, Clock, AlertCircle, Sparkles } from 'lucide-react';
+import { Home, Receipt, Clock, AlertCircle, Sparkles } from 'lucide-react';
 
 interface SuccessViewProps {
   setView: (view: ViewState) => void;
@@ -10,8 +10,6 @@ interface SuccessViewProps {
 }
 
 export default function SuccessView({ setView, fileName, submission }: SuccessViewProps) {
-  const [downloaded, setDownloaded] = useState(false);
-  
   // Dynamic Local Time Extraction
   const getSubmissionTime = () => {
     const now = submission?.submittedAt ? new Date(submission.submittedAt) : new Date();
@@ -23,20 +21,13 @@ export default function SuccessView({ setView, fileName, submission }: SuccessVi
     return `${hours.toString().padStart(2, '0')}:${minutes} ${ampm}`;
   };
 
-  const handlePdfDownload = () => {
-    setDownloaded(true);
-    setTimeout(() => {
-      setDownloaded(false);
-    }, 3000);
-  };
-
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 md:p-16 relative overflow-hidden bg-slate-950">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 p-6 md:p-12">
       {/* Background Atmospheric Glow */}
       <div className="absolute inset-0 w-full h-full ambient-glow pointer-events-none z-0"></div>
 
       {/* Main Success Card */}
-      <main className="w-full max-w-2xl bg-slate-900/80 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-800/60 p-8 md:p-12 flex flex-col items-center relative z-10">
+      <main className="relative z-10 flex w-full max-w-2xl flex-col items-center rounded-2xl border border-slate-800/60 bg-slate-900/80 p-8 shadow-2xl backdrop-blur-xl md:p-10">
         
         {/* Animated Checkmark */}
         <div className="mb-8 check-wrapper">
@@ -57,6 +48,10 @@ export default function SuccessView({ setView, fileName, submission }: SuccessVi
             {submission?.deliveryMode === 'mock' ? 'Mock reference' : 'Government receipt'}: {submission?.trackingId || 'Accepted — no tracking ID returned'}
           </span>
         </div>
+
+        <p className="-mt-6 mb-8 max-w-full truncate text-center text-xs text-slate-400" title={fileName}>
+          Source video: <span className="font-mono text-slate-200">{fileName || 'Filename unavailable'}</span>
+        </p>
 
         {/* Details Bento Grid */}
         <div className="w-full grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
@@ -92,11 +87,17 @@ export default function SuccessView({ setView, fileName, submission }: SuccessVi
             <div className="flex items-center gap-2 mb-2">
               <Sparkles size={16} className="text-emerald-400" />
               <span className="font-display text-[10px] font-bold text-emerald-400 uppercase tracking-wider">
-                Reward Awarded
+                {submission?.deliveryMode === 'mock'
+                  ? 'Demo reward status'
+                  : submission?.rewardCredits
+                    ? 'Reward awarded'
+                    : 'Reward total'}
               </span>
             </div>
             <span className="font-display text-lg font-bold text-emerald-300 mt-1">
-              +{submission?.rewardCredits ?? 0} <span className="text-slate-500 text-xs font-normal">Cr</span>
+              {submission?.deliveryMode === 'mock'
+                ? 'Not issued'
+                : `${submission?.rewardCredits ?? 0} Cr`}
             </span>
           </div>
         </div>
@@ -104,8 +105,8 @@ export default function SuccessView({ setView, fileName, submission }: SuccessVi
         {submission?.governmentResponse && <p className="mt-6 text-center text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-4 py-3">{submission.governmentResponse}</p>}
         {submission?.reportText && <pre className="mt-4 w-full whitespace-pre-wrap text-left text-xs leading-5 text-slate-300 bg-slate-950 border border-slate-800 rounded-lg p-4 font-sans">{submission.reportText}</pre>}
 
-        {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row w-full gap-4 justify-center">
+        {/* Action Button */}
+        <div className="flex w-full justify-center">
           <button 
             onClick={() => setView('CITIZEN_DASHBOARD')}
             className="bg-blue-500 hover:bg-blue-400 text-white hover:scale-[1.02] active:scale-95 transition-all duration-300 shadow-[0_4px_20px_rgba(59,130,246,0.2)] hover:shadow-[0_4px_25px_rgba(59,130,246,0.3)] px-8 py-3.5 rounded-xl font-medium text-xs flex items-center justify-center gap-2 cursor-pointer"
@@ -114,20 +115,7 @@ export default function SuccessView({ setView, fileName, submission }: SuccessVi
             Return to Dashboard
           </button>
           
-          <button 
-            onClick={handlePdfDownload}
-            className="bg-transparent border border-slate-700 text-slate-300 hover:bg-slate-800 hover:border-slate-500 active:scale-95 transition-all duration-200 px-8 py-3.5 rounded-xl font-medium text-xs flex items-center justify-center gap-2 cursor-pointer relative"
-          >
-            <Download size={16} />
-            {downloaded ? 'PDF Downloaded!' : 'Download Summary PDF'}
-          </button>
         </div>
-
-        {downloaded && (
-          <div className="mt-6 text-emerald-400 text-xs font-medium flex items-center gap-1.5 animate-bounce">
-            <Sparkles size={14} /> Summary report PDF successfully generated and saved to device!
-          </div>
-        )}
       </main>
     </div>
   );

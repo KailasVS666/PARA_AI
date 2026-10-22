@@ -1,112 +1,119 @@
-import React from 'react';
-import { ViewState } from '../types';
-import { 
-  LayoutDashboard, 
-  Map, 
-  FileCode, 
-  AlertTriangle, 
-  HelpCircle, 
-  LogOut, 
-  FileSpreadsheet, 
-  ShieldCheck 
+import {
+  LayoutDashboard,
+  FileSearch,
+  HelpCircle,
+  Home,
+  ShieldCheck,
 } from 'lucide-react';
+
+import type { ViewState } from '../types';
 
 interface SidebarProps {
   currentView: ViewState;
   setView: (view: ViewState) => void;
-  onEmergencyTrigger?: () => void;
 }
 
-export default function Sidebar({ currentView, setView, onEmergencyTrigger }: SidebarProps) {
+export default function Sidebar({
+  currentView,
+  setView,
+}: SidebarProps) {
+  const navigation = [
+    {
+      label: 'Overview',
+      icon: LayoutDashboard,
+      view: 'CITIZEN_DASHBOARD' as ViewState,
+    },
+    {
+      label: 'Evidence Log',
+      icon: FileSearch,
+      view: 'CONSOLE' as ViewState,
+    },
+  ];
+
   return (
-    <aside className="bg-slate-950/90 backdrop-blur-md border-r border-slate-800/40 w-64 shrink-0 flex flex-col h-screen py-8 px-4 z-50">
-      {/* Brand Header */}
-      <div className="mb-10 px-4">
-        <button 
-          onClick={() => setView('LANDING')}
-          className="font-display text-2xl font-bold tracking-tighter text-blue-300 hover:opacity-95 text-left cursor-pointer"
-        >
-          PARA Console
-        </button>
-        <div className="flex items-center gap-2 mt-1.5 text-slate-500 text-xs">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>V3.2 Active</span>
+    <aside className="flex h-full min-h-screen w-60 shrink-0 flex-col border-r border-slate-800/80 bg-slate-950 text-slate-200">
+      {/* Brand */}
+      <button
+        type="button"
+        onClick={() => setView('LANDING')}
+        className="flex items-center gap-3 border-b border-slate-800/80 px-5 py-6 text-left transition hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-inset"
+        aria-label="Return to PARA home"
+      >
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400">
+          <ShieldCheck size={24} />
         </div>
-      </div>
 
-      {/* Nav Section */}
-      <nav className="flex-1 space-y-1">
-        <button
-          onClick={() => setView('CITIZEN_DASHBOARD')}
-          className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer ${
-            currentView === 'CITIZEN_DASHBOARD'
-              ? 'bg-blue-500/10 text-blue-300 border-r-4 border-blue-400'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/40 hover:translate-x-1'
-          }`}
-        >
-          <LayoutDashboard size={18} />
-          <span>Overview</span>
-        </button>
+        <div>
+          <div className="text-lg font-bold tracking-wide text-white">
+            PARA
+          </div>
+          <div className="text-xs text-slate-500">
+            Verification Console
+          </div>
+        </div>
+      </button>
 
-        <button
-          onClick={() => setView('CITIZEN_DASHBOARD')}
-          className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-900/40 hover:translate-x-1 transition-all duration-200 cursor-pointer text-left"
-        >
-          <Map size={18} />
-          <span>Live Maps</span>
-        </button>
+      {/* Navigation */}
+      <nav
+        className="flex-1 space-y-1.5 px-3 py-6"
+        aria-label="Main navigation"
+      >
+        <p className="mb-4 px-3 text-xs font-semibold uppercase tracking-widest text-slate-500">
+          Workspace
+        </p>
 
-        <button
-          onClick={() => setView('CONSOLE')}
-          className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-900/40 hover:translate-x-1 transition-all duration-200 cursor-pointer text-left"
-        >
-          <FileCode size={18} />
-          <span>Evidence Log</span>
-        </button>
+        {navigation.map((item) => {
+          const Icon = item.icon;
+          const active = currentView === item.view;
 
-        <button
-          onClick={() => setView('CONSOLE')}
-          className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer ${
-            currentView === 'CONSOLE'
-              ? 'bg-blue-500/10 text-blue-300 border-r-4 border-blue-400'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/40 hover:translate-x-1'
-          }`}
-        >
-          <FileSpreadsheet size={18} />
-          <span>Reports</span>
-        </button>
+          return (
+            <button
+              key={item.label}
+              type="button"
+              onClick={() => setView(item.view)}
+              aria-current={active ? 'page' : undefined}
+              className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${
+                active
+                  ? 'border border-emerald-500/20 bg-emerald-500/10 text-emerald-400'
+                  : 'text-slate-400 hover:bg-slate-900 hover:text-white'
+              }`}
+            >
+              <Icon size={19} />
+              <span>{item.label}</span>
 
-        <button
-          onClick={() => setView('CITIZEN_DASHBOARD')}
-          className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-900/40 hover:translate-x-1 transition-all duration-200 cursor-pointer text-left"
-        >
-          <ShieldCheck size={18} />
-          <span>Accountability</span>
-        </button>
+              {active && (
+                <span className="ml-auto h-2 w-2 rounded-full bg-emerald-400" />
+              )}
+            </button>
+          );
+        })}
       </nav>
 
-      {/* Footer CTA & Actions */}
-      <div className="mt-auto px-2 space-y-4 border-t border-slate-800/40 pt-6">
-        <button 
-          onClick={onEmergencyTrigger}
-          className="w-full py-3 px-4 bg-red-950/80 hover:bg-red-900/80 text-red-300 rounded-xl font-medium text-xs flex items-center justify-center gap-2 border border-red-900/40 transition-all duration-300 hover:shadow-[0_0_15px_rgba(239,68,68,0.15)] cursor-pointer"
+      {/* Help */}
+      <div className="border-t border-slate-800/80 p-4">
+        <div className="mb-3 rounded-lg bg-slate-900/60 p-4">
+          <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-white">
+            <HelpCircle size={17} className="text-emerald-400" />
+            Need help?
+          </div>
+
+          <p className="text-xs leading-5 text-slate-400">
+            Use the Evidence Log to review detected incidents and
+            approve or reject individual findings.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setView('LANDING')}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm text-slate-400 transition hover:bg-slate-900 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
         >
-          <AlertTriangle size={14} className="animate-pulse" />
-          Emergency Report
+          <Home size={18} />
+          <span>Return to Home</span>
         </button>
-        
-        <div className="space-y-1">
-          <button className="w-full flex items-center gap-3 px-4 py-2 text-slate-500 hover:text-slate-300 text-xs transition-colors cursor-pointer text-left">
-            <HelpCircle size={16} />
-            <span>Help</span>
-          </button>
-          <button 
-            onClick={() => setView('LANDING')}
-            className="w-full flex items-center gap-3 px-4 py-2 text-slate-500 hover:text-slate-300 text-xs transition-colors cursor-pointer text-left"
-          >
-            <LogOut size={16} />
-            <span>Sign Out</span>
-          </button>
+
+        <div className="px-3 pb-2 pt-4 text-xs text-slate-600">
+          PARA · Demonstration Console
         </div>
       </div>
     </aside>
